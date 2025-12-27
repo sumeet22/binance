@@ -1,0 +1,64 @@
+trading:
+  pairs:
+    - BTCUSDT
+    - ETHUSDT
+  timeframe: 15m
+  max_open_trades: 1  # CHANGED: Focus on best signal only
+
+risk:
+  position_size_pct: 4.0  # CHANGED: Larger positions
+  stop_loss_pct: 1.0      # CHANGED: Very tight stop
+  take_profit_pct: 5.0    # CHANGED: Let winners run (5:1 reward-risk)
+  daily_loss_limit_pct: 5.0
+  max_position_size_usdt: 500
+  use_trailing_stop: true
+  trailing_stop_pct: 1.5
+
+strategy:
+  name: enhanced_trend
+  params:
+    fast_length: 8        # CHANGED: Back to medium speed
+    slow_length: 21       # CHANGED: Classic EMA
+    trend_length: 55      # CHANGED: Longer trend filter
+    
+    use_rsi_filter: true
+    rsi_period: 14
+    rsi_oversold: 40      # CHANGED: Only trade strong trends
+    rsi_overbought: 75    # CHANGED: Let it run higher
+    
+    use_volume_filter: true
+    volume_ma_period: 20
+    min_volume_multiplier: 2.0  # CHANGED: Only high volume moves
+    
+    use_ema: true
+
+backtest:
+  initial_capital: 1000
+  maker_fee: 0.1
+  taker_fee: 0.1
+  slippage: 0.05
+  start_date: "2024-11-01"
+  end_date: "2024-12-01"
+
+paper:
+  initial_capital: 1000
+  update_interval: 60
+  use_testnet: true
+
+live:
+  dry_run: false
+  update_interval: 60
+  use_websocket: false
+  confirm_trades: false
+
+logging:
+  level: INFO
+  to_file: true
+  log_dir: logs
+  rotate_daily: true
+
+exchange:
+  timeout: 30
+  rate_limit_buffer: 0.9
+  ws_reconnect_attempts: 5
+  ws_reconnect_delay: 5

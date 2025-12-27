@@ -1,0 +1,36 @@
+# Core dependencies
+pandas>=2.0.0
+numpy>=1.24.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+pyyaml>=6.0
+
+# WebSocket support
+websockets>=12.0
+
+# Data visualization (optional, for plotting)
+matplotlib>=3.7.0
+plotly>=5.14.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.21.0
+
+# Type checking
+mypy>=1.4.0
+
+# Logging
+colorlog>=6.7.0
+
+# HTTP client (alternative to requests)
+httpx>=0.24.0
+
+# Data validation
+pydantic>=2.0.0
+
+# Database for paper trading (optional)
+sqlalchemy>=2.0.0
+
+# Async support
+aiohttp>=3.8.0

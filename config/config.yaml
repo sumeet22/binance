@@ -1,0 +1,90 @@
+# 🎯 HIGH PROBABILITY + HIGH R:R CONFIGURATION (TUNED)
+# Optimized with ADX Filter for trend confirmation
+
+trading:
+  pairs:
+    - BTCUSDT
+    - ETHUSDT
+  
+  timeframe: 15m
+  
+  # Max 2 positions to manage risk
+  max_open_trades: 2
+
+risk:
+  # Position size
+  position_size_pct: 3.5    # Increased slightly
+  
+  # Very tight SL for low drawdown
+  stop_loss_pct: 1.5
+  
+  # High TP for 5:1 Reward-Risk Ratio
+  take_profit_pct: 5.0
+  
+  # Daily loss limit
+  daily_loss_limit_pct: 4.0
+  
+  # Max position size
+  max_position_size_usdt: 450
+  
+  # Trailing stop to lock in profits
+  use_trailing_stop: true
+  trailing_stop_pct: 1.2
+
+strategy:
+  name: enhanced_trend
+  
+  params:
+    # Fibonacci MAs
+    fast_length: 8
+    slow_length: 21
+    trend_length: 55
+    
+    # RSI: Wider range
+    use_rsi_filter: true
+    rsi_period: 14
+    rsi_oversold: 30
+    rsi_overbought: 75
+    
+    # ADX: TUNED for earlier entry
+    use_adx_filter: true
+    adx_period: 14
+    adx_threshold: 20  # Reduced from 25 to catch trends earlier
+    
+    # Volume Confirmation
+    use_volume_filter: true
+    volume_ma_period: 20
+    min_volume_multiplier: 1.3  # Reduced from 1.5
+    
+    use_ema: true
+
+backtest:
+  initial_capital: 1000
+  maker_fee: 0.1
+  taker_fee: 0.1
+  slippage: 0.05
+  start_date: "2024-11-01"
+  end_date: "2024-12-01"
+
+paper:
+  initial_capital: 1000
+  update_interval: 60
+  use_testnet: true
+
+live:
+  dry_run: false
+  update_interval: 60
+  use_websocket: false
+  confirm_trades: false
+
+logging:
+  level: INFO
+  to_file: true
+  log_dir: logs
+  rotate_daily: true
+
+exchange:
+  timeout: 30
+  rate_limit_buffer: 0.9
+  ws_reconnect_attempts: 5
+  ws_reconnect_delay: 5
