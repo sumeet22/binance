@@ -1,0 +1,56 @@
+# ============================================
+# Institutional Trading Bot - Docker Compose
+# For local testing and Coolify deployment
+# ============================================
+
+version: '3.8'
+
+services:
+  trading-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: institutional-bot
+    restart: unless-stopped
+    
+    # Environment variables (override in Coolify UI or .env file)
+    environment:
+      - TZ=UTC
+      - PYTHONUNBUFFERED=1
+      # Trading Config - SET THESE IN COOLIFY ENVIRONMENT VARIABLES
+      # - MODE=PAPER
+      # - CAPITAL=240.0
+      # - RISK_PER_TRADE=20.0
+      # - MAX_DAILY_LOSS=5.0
+      # - BINANCE_API_KEY=your_key
+      # - BINANCE_API_SECRET=your_secret
+      # - MONGO_URI=mongodb://user:pass@host:27017/db
+    
+    # Mount .env file for local development
+    env_file:
+      - .env
+    
+    # Persist trade data across container restarts
+    volumes:
+      - bot_data:/app/data
+    
+    # Resource limits (adjust based on your server)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  bot_data:
+    driver: local

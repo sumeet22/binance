@@ -1,0 +1,55 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local development files
+.env.local
+.env.development
+*.log
+
+# Test files
+tests/
+*_test.py
+test_*.py
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Local data files (will be mounted via volume)
+trade_history.csv
+bot_state.json
+trade_history_backup.csv
+
+# Misc
+.DS_Store
+Thumbs.db
