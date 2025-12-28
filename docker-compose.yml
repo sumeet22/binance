@@ -2,55 +2,88 @@
 # Institutional Trading Bot - Docker Compose
 # For local testing and Coolify deployment
 # ============================================
-
-version: '3.8'
+# 
+# LOCAL USAGE:
+#   docker-compose up --build           # Build and run
+#   docker-compose up -d --build        # Run in background
+#   docker-compose logs -f trading-bot  # View logs
+#   docker-compose down                 # Stop
+#
+# COOLIFY: Import this file or use Dockerfile directly
+# ============================================
 
 services:
   trading-bot:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: institutional-bot
+      target: production
+    image: institutional-trading-bot:latest
+    container_name: institutional-trading-bot
     restart: unless-stopped
     
-    # Environment variables (override in Coolify UI or .env file)
+    # Environment variables
+    # For Coolify: Override these in the Coolify UI
     environment:
-      - TZ=UTC
+      - TZ=${TZ:-UTC}
       - PYTHONUNBUFFERED=1
-      # Trading Config - SET THESE IN COOLIFY ENVIRONMENT VARIABLES
-      # - MODE=PAPER
-      # - CAPITAL=240.0
-      # - RISK_PER_TRADE=20.0
-      # - MAX_DAILY_LOSS=5.0
-      # - BINANCE_API_KEY=your_key
-      # - BINANCE_API_SECRET=your_secret
-      # - MONGO_URI=mongodb://user:pass@host:27017/db
+      # All trading config comes from .env file or Coolify env vars
     
-    # Mount .env file for local development
+    # Load environment from .env file
     env_file:
       - .env
     
     # Persist trade data across container restarts
     volumes:
       - bot_data:/app/data
+      # Optionally mount local data for development
+      # - ./trade_history.csv:/app/data/trade_history.csv
+      # - ./bot_state.json:/app/data/bot_state.json
     
-    # Resource limits (adjust based on your server)
+    # Health check (also defined in Dockerfile)
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python.*live_bot.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Resource limits
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '1.0'
+          memory: 1G
         reservations:
-          cpus: '0.1'
-          memory: 128M
+          cpus: '0.25'
+          memory: 256M
+      # Restart policy for Docker Swarm / Coolify
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
     
     # Logging configuration
     logging:
       driver: "json-file"
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: "50m"
+        max-file: "5"
+        tag: "trading-bot"
+    
+    # Network configuration
+    networks:
+      - trading-network
 
+# Named volumes for data persistence
 volumes:
   bot_data:
     driver: local
+    name: trading_bot_data
+
+# Networks
+networks:
+  trading-network:
+    driver: bridge
+    name: trading-network

@@ -3,6 +3,7 @@ import sys
 import threading
 import json
 import os
+import signal
 import pandas as pd  
 from binance.enums import SIDE_BUY, SIDE_SELL, ORDER_TYPE_MARKET
 from config import SYMBOLS, RISK_PER_TRADE, CHECK_INTERVAL_SEC, SL_MULTIPLIER, TP_MULTIPLIER, MODE, CAPITAL, MAX_DAILY_LOSS, TRADING_FEE, MAX_OPEN_POSITIONS
@@ -158,11 +159,15 @@ class DynamicBot:
             logger.error(f"Failed to log position update: {e}")
 
     def run(self):
-        t = threading.Thread(target=self.command_listener)
-        t.daemon = True
-        t.start()
-        
-        logger.info("Scanning Market... (Type 'status' or 'exit <symbol>' to manage)")
+        # Only start command listener if running in interactive terminal
+        if sys.stdin.isatty():
+            t = threading.Thread(target=self.command_listener)
+            t.daemon = True
+            t.start()
+            logger.info("Scanning Market... (Type 'status' or 'exit <symbol>' to manage)")
+        else:
+            logger.info("Running in non-interactive mode (Docker/background). Command listener disabled.")
+            logger.info("Scanning Market...")
         
         while not self.stop_signal:
             start_scan = time.time()
@@ -179,6 +184,7 @@ class DynamicBot:
             time.sleep(sleep_time)
 
     def command_listener(self):
+        """Interactive command listener - only works when stdin is a TTY"""
         while not self.stop_signal:
             try:
                 cmd = input()
@@ -198,7 +204,11 @@ class DynamicBot:
                     print("Stopping Bot...")
                     self.stop_signal = True
                     sys.exit(0)
-            except:
+            except EOFError:
+                # stdin closed (Docker environment)
+                logger.debug("stdin closed, command listener exiting")
+                break
+            except Exception:
                 pass
 
     def print_status(self):
@@ -478,11 +488,29 @@ if __name__ == "__main__":
     print(f"SL_MULTIPLIER: {SL_MULTIPLIER}x | TP_MULTIPLIER: {TP_MULTIPLIER}x")
     print("=" * 60)
     
+    bot = None
+    
+    def graceful_shutdown(signum, frame):
+        """Handle Docker/Coolify stop signals gracefully"""
+        sig_name = signal.Signals(signum).name
+        print(f"\n[SIGNAL] Received {sig_name} - Shutting down gracefully...")
+        if bot:
+            bot.stop_signal = True
+            bot.save_state()
+            print("[SHUTDOWN] State saved successfully.")
+        sys.exit(0)
+    
+    # Register signal handlers for Docker/Coolify shutdown
+    signal.signal(signal.SIGTERM, graceful_shutdown)
+    signal.signal(signal.SIGINT, graceful_shutdown)
+    
     try:
         bot = DynamicBot()
         bot.run()
     except KeyboardInterrupt:
         print("\nBot stopped by user.")
+        if bot:
+            bot.save_state()
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         import traceback

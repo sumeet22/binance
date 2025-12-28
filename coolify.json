@@ -1,0 +1,59 @@
+{
+    "name": "Institutional Trading Bot",
+    "description": "Automated crypto trading bot with institutional-grade signal detection",
+    "version": "1.0.0",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "target": "production"
+    },
+    "healthcheck": {
+        "enabled": true,
+        "interval": 30,
+        "timeout": 10,
+        "retries": 3,
+        "start_period": 60
+    },
+    "resources": {
+        "limits": {
+            "cpus": "1.0",
+            "memory": "1G"
+        },
+        "reservations": {
+            "cpus": "0.25",
+            "memory": "256M"
+        }
+    },
+    "volumes": [
+        {
+            "source": "trading_bot_data",
+            "target": "/app/data",
+            "type": "volume"
+        }
+    ],
+    "environment": {
+        "required": [
+            "MODE",
+            "BINANCE_API_KEY",
+            "BINANCE_API_SECRET",
+            "CAPITAL",
+            "RISK_PER_TRADE",
+            "MAX_DAILY_LOSS",
+            "MONGO_URI"
+        ],
+        "optional": [
+            "MONGO_DB_NAME",
+            "SYMBOLS",
+            "INTERVALS",
+            "SL_MULTIPLIER",
+            "TP_MULTIPLIER",
+            "CHECK_INTERVAL_SEC",
+            "TRADING_FEE",
+            "MAX_OPEN_POSITIONS"
+        ]
+    },
+    "labels": {
+        "coolify.managed": "true",
+        "app.type": "trading-bot",
+        "app.framework": "python"
+    }
+}
