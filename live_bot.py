@@ -80,43 +80,51 @@ class DynamicBot:
                 logger.error(f"Failed to load state: {e}")
 
     def sync_with_mongo(self):
+        """Recover any open trades from MongoDB on container restart"""
         col = get_mongo_collection()
-        if col is None: return
+        if col is None: 
+            logger.warning("MongoDB not available for trade recovery")
+            return
         
         try:
+            # Find all recent ENTRY trades for current mode
             entries = list(col.find({"reason": "ENTRY", "mode": MODE}).sort("timestamp", -1).limit(50))
+            recovered_count = 0
             
             for entry in entries:
                 sym = entry['symbol']
-                if self.active_trades.get(sym): continue
+                # Skip if we already have this trade (from local state or previous iteration)
+                if self.active_trades.get(sym): 
+                    continue
                 
+                # Check if this trade has been closed (by looking for exit trades)
                 exit_doc = col.find_one({
                     "symbol": sym,
                     "mode": MODE,
                     "timestamp": {"$gt": entry['timestamp']},
-                    "pnl_amount": {"$ne": 0} 
+                    "$or": [
+                        {"reason": {"$in": ["STOP_LOSS", "TAKE_PROFIT", "MANUAL_EXIT", "TREND_FLIP"]}},
+                        {"pnl_amount": {"$ne": 0}}
+                    ]
                 })
                 
+                # If no exit found, trade is still open - recover it
                 if not exit_doc:
-                    logger.info(f"[{sym}] Recovering OPEN trade from MongoDB...")
+                    logger.info(f"[{sym}] 🔄 Recovering OPEN trade from MongoDB...")
                     
                     price = float(entry['price'])
                     qty = float(entry['quantity'])
                     risk = price * 0.01 
                     atr = risk / SL_MULTIPLIER if SL_MULTIPLIER > 0 else 0
                     
-                    sl = 0.0
-                    tp = 0.0
-                    pos_type = ''
-                    
                     if entry['action'] == 'BUY':
-                         pos_type = 'LONG'
-                         sl = price - (SL_MULTIPLIER * atr)
-                         tp = price + (TP_MULTIPLIER * atr)
+                        pos_type = 'LONG'
+                        sl = price - (SL_MULTIPLIER * atr)
+                        tp = price + (TP_MULTIPLIER * atr)
                     else:
-                         pos_type = 'SHORT'
-                         sl = price + (SL_MULTIPLIER * atr)
-                         tp = price - (TP_MULTIPLIER * atr)
+                        pos_type = 'SHORT'
+                        sl = price + (SL_MULTIPLIER * atr)
+                        tp = price - (TP_MULTIPLIER * atr)
                     
                     self.active_trades[sym] = {
                         'type': pos_type,
@@ -131,7 +139,13 @@ class DynamicBot:
                         'entry_tf': '15m',
                         'entry_time': time.time()
                     }
-                    self.save_state()
+                    recovered_count += 1
+            
+            if recovered_count > 0:
+                self.save_state()
+                logger.info(f"✅ Recovered {recovered_count} open trade(s) from MongoDB")
+            else:
+                logger.info("No open trades to recover from MongoDB")
                     
         except Exception as e:
             logger.error(f"Mongo Sync Error: {e}")
