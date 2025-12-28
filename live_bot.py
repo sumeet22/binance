@@ -10,6 +10,7 @@ from config import SYMBOLS, RISK_PER_TRADE, CHECK_INTERVAL_SEC, SL_MULTIPLIER, T
 from utils_bot import get_binance_client, fetch_klines, logger, fetch_exchange_info, round_step_size
 from strategy import populate_indicators, analyze_trend_strength, get_entry_signal
 from trade_logger import log_trade, init_mongo_db, get_mongo_collection
+from smc import calculate_smc_sl_tp, populate_smc_indicators
 
 TREND_TIMEFRAMES = ['4h', '2h', '1h'] 
 ENTRY_TIMEFRAMES = ['30m', '15m']
@@ -316,10 +317,11 @@ class DynamicBot:
                 rationale = f"Trend:{best_trend_tf}({best_bias}) + Entry:{entry_tf}({reason})"
                 if self.active_trades[symbol] is None:
                      logger.info(f"[{symbol}] *** ENTRY TRIGGERED *** {rationale}")
-                     self.execute_trade(symbol, signal, current_price, atr, rationale, best_trend_tf, entry_tf)
+                     self.execute_trade(symbol, signal, current_price, atr, rationale, best_trend_tf, entry_tf, df_entry)
                      break 
 
-    def execute_trade(self, symbol, signal, price, atr, rationale, trend_tf, entry_tf):
+    def execute_trade(self, symbol, signal, price, atr, rationale, trend_tf, entry_tf, df_entry=None):
+        """Execute trade with SMC-based or ATR-based SL/TP"""
         side = SIDE_BUY if signal == "BUY" else SIDE_SELL
         
         raw_qty = RISK_PER_TRADE / price
@@ -334,19 +336,56 @@ class DynamicBot:
         if success:
             fill = float(fill)
             atr = float(atr)
+            pos_type = 'LONG' if signal == "BUY" else 'SHORT'
             
-            if signal == "BUY":
-                sl_price = fill - (SL_MULTIPLIER * atr)
-                tp_price = fill + (TP_MULTIPLIER * atr)
-                pos_type = 'LONG'
-                risk_amt = fill - sl_price
-            else:
-                sl_price = fill + (SL_MULTIPLIER * atr)
-                tp_price = fill - (TP_MULTIPLIER * atr)
-                pos_type = 'SHORT'
-                risk_amt = sl_price - fill
+            # Try SMC-based SL/TP first
+            sl_price = None
+            tp_price = None
+            sl_reason = "ATR"
+            tp_reason = "ATR"
+            
+            if df_entry is not None:
+                try:
+                    # Add SMC indicators and calculate levels
+                    df_smc = populate_smc_indicators(df_entry)
+                    smc_levels = calculate_smc_sl_tp(df_smc, fill, pos_type, risk_reward=TP_MULTIPLIER)
+                    
+                    if smc_levels.get('sl') and smc_levels.get('tp'):
+                        # Validate SMC levels are reasonable (not too far)
+                        smc_sl = smc_levels['sl']
+                        smc_tp = smc_levels['tp']
+                        
+                        max_sl_distance = SL_MULTIPLIER * 2 * atr  # Max 2x our normal SL
+                        min_sl_distance = 0.5 * atr  # Min 0.5 ATR
+                        
+                        sl_distance = abs(fill - smc_sl)
+                        
+                        if min_sl_distance <= sl_distance <= max_sl_distance:
+                            sl_price = smc_sl
+                            tp_price = smc_tp
+                            sl_reason = smc_levels.get('sl_reason', 'SMC')
+                            tp_reason = smc_levels.get('tp_reason', 'SMC')
+                            logger.info(f"[{symbol}] Using SMC Levels - SL: {sl_reason}, TP: {tp_reason}")
+                        else:
+                            logger.info(f"[{symbol}] SMC SL too extreme ({sl_distance:.4f}), using ATR")
+                except Exception as e:
+                    logger.warning(f"[{symbol}] SMC calculation failed: {e}, using ATR fallback")
+            
+            # Fallback to ATR-based levels
+            if sl_price is None:
+                if pos_type == 'LONG':
+                    sl_price = fill - (SL_MULTIPLIER * atr)
+                    tp_price = fill + (TP_MULTIPLIER * atr)
+                else:
+                    sl_price = fill + (SL_MULTIPLIER * atr)
+                    tp_price = fill - (TP_MULTIPLIER * atr)
             
             if sl_price < 0: sl_price = 0.0001
+            
+            risk_amt = abs(fill - sl_price)
+            
+            # Enhanced rationale with SL/TP info
+            full_rationale = f"{rationale} | SL:{sl_reason} TP:{tp_reason}"
                 
             self.active_trades[symbol] = {
                 'type': pos_type,
@@ -359,10 +398,12 @@ class DynamicBot:
                 'entry_time': time.time(),
                 'trend_tf': trend_tf, 
                 'entry_tf': entry_tf,
-                'risk': risk_amt
+                'risk': risk_amt,
+                'sl_reason': sl_reason,
+                'tp_reason': tp_reason
             }
             self.save_state() 
-            log_trade(MODE, symbol, side, fill, qty, "ENTRY", 0, 0, 0, rationale)
+            log_trade(MODE, symbol, side, fill, qty, "ENTRY", 0, 0, 0, full_rationale)
 
     def manage_trade(self, symbol):
         pos = self.active_trades[symbol]

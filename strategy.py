@@ -115,27 +115,134 @@ def analyze_trend_strength(df):
     return bias, adx
 
 def get_entry_signal(df, trend_bias):
+    """
+    Enhanced entry signal with multiple confirmations.
+    Based on trade history analysis - 0% win rate with MACD_Cross signals.
+    
+    Improvements:
+    1. Volume confirmation (above average)
+    2. Candle body confirmation (bullish/bearish candle)
+    3. Stronger RSI filters
+    4. ADX strength confirmation
+    5. MACD histogram momentum
+    """
+    if len(df) < 5:
+        return "HOLD", "Insufficient_Data"
+    
     curr = df.iloc[-1]
     prev = df.iloc[-2]
+    prev2 = df.iloc[-3]
     
     # Avoid NANs
-    if pd.isna(curr['macd']) or pd.isna(prev['macd']): return "HOLD", "None"
+    if pd.isna(curr['macd']) or pd.isna(prev['macd']): 
+        return "HOLD", "NaN_Values"
     
-    macd_cross_up = (prev['macd'] < prev['macdsignal']) & (curr['macd'] > curr['macdsignal'])
-    macd_cross_down = (prev['macd'] > prev['macdsignal']) & (curr['macd'] < curr['macdsignal'])
+    # === VOLUME CONFIRMATION ===
+    # Current volume should be above 20-period average
+    vol_confirmed = curr['volume'] > curr.get('vol_ema', curr['volume'] * 0.8) if 'vol_ema' in df.columns else True
+    
+    # === CANDLE BODY ANALYSIS ===
+    curr_body = curr['close'] - curr['open']
+    prev_body = prev['close'] - prev['open']
+    candle_range = curr['high'] - curr['low']
+    body_ratio = abs(curr_body) / candle_range if candle_range > 0 else 0
+    
+    # Strong candle = body is >50% of total range
+    strong_candle = body_ratio > 0.5
+    
+    # === MACD ANALYSIS ===
+    macd_cross_up = (prev['macd'] < prev['macdsignal']) and (curr['macd'] > curr['macdsignal'])
+    macd_cross_down = (prev['macd'] > prev['macdsignal']) and (curr['macd'] < curr['macdsignal'])
+    
+    # MACD histogram should be growing (momentum confirmation)
+    macd_hist = curr['macd'] - curr['macdsignal']
+    prev_macd_hist = prev['macd'] - prev['macdsignal']
+    macd_momentum_up = macd_hist > prev_macd_hist
+    macd_momentum_down = macd_hist < prev_macd_hist
+    
+    # === ADX STRENGTH ===
+    adx = curr.get('adx', 0)
+    if pd.isna(adx): adx = 0
+    strong_trend = adx > 30  # Increased from 25
+    
+    # === RSI ANALYSIS ===
+    rsi = curr['rsi']
+    prev_rsi = prev['rsi']
     
     if trend_bias == "BULL":
-        # Buy: 1. MACD Cross Up or 2. RSI Trend Rejoin
-        # + RSI not Overbought
-        if macd_cross_up and curr['rsi'] > 40 and curr['rsi'] < 75:
-            return "BUY", "MACD_Cross_Bull"
-        if (curr['macd'] > curr['macdsignal']) and (prev['rsi'] < 50 and curr['rsi'] > 50):
-             return "BUY", "RSI_Trend_Rejoin"
+        # === LONG ENTRY CONDITIONS ===
+        # More stringent conditions to reduce false signals
+        
+        # Condition 1: MACD Cross with confirmations
+        macd_entry = (
+            macd_cross_up and           # MACD crossed up
+            vol_confirmed and            # Volume above average
+            curr_body > 0 and            # Bullish candle (green)
+            strong_candle and            # Strong body
+            rsi > 40 and rsi < 65 and    # RSI not overbought (tightened from 75)
+            macd_momentum_up             # Histogram growing
+        )
+        
+        if macd_entry:
+            return "BUY", "MACD_Cross_Confirmed"
+        
+        # Condition 2: RSI Trend Rejoin with confirmations
+        rsi_rejoin = (
+            curr['macd'] > curr['macdsignal'] and   # Already in bullish MACD
+            prev_rsi < 45 and curr['rsi'] > 50 and  # RSI crossed above 50 (tightened)
+            vol_confirmed and                        # Volume confirmation
+            curr_body > 0 and                        # Bullish candle
+            strong_trend                             # Strong ADX
+        )
+        
+        if rsi_rejoin:
+            return "BUY", "RSI_Rejoin_Confirmed"
+        
+        # Condition 3: EMA bounce (price pulled back to EMA and bouncing)
+        ema_50 = curr.get('ema_50')
+        if ema_50 and not pd.isna(ema_50):
+            near_ema = abs(curr['low'] - ema_50) < (curr.get('atr', curr['close'] * 0.01) * 0.5)
+            bouncing = curr['close'] > curr['open'] and prev['low'] < ema_50
+            
+            if near_ema and bouncing and vol_confirmed and rsi > 40 and rsi < 60:
+                return "BUY", "EMA_Bounce"
 
     elif trend_bias == "BEAR":
-        if macd_cross_down and curr['rsi'] < 60 and curr['rsi'] > 25:
-            return "SELL", "MACD_Cross_Bear"
-        if (curr['macd'] < curr['macdsignal']) and (prev['rsi'] > 50 and curr['rsi'] < 50):
-            return "SELL", "RSI_Trend_Rejoin"
+        # === SHORT ENTRY CONDITIONS ===
+        
+        # Condition 1: MACD Cross with confirmations
+        macd_entry = (
+            macd_cross_down and          # MACD crossed down
+            vol_confirmed and             # Volume above average
+            curr_body < 0 and             # Bearish candle (red)
+            strong_candle and             # Strong body
+            rsi < 60 and rsi > 35 and     # RSI not oversold (tightened from 25)
+            macd_momentum_down            # Histogram declining
+        )
+        
+        if macd_entry:
+            return "SELL", "MACD_Cross_Confirmed"
+        
+        # Condition 2: RSI Trend Rejoin with confirmations
+        rsi_rejoin = (
+            curr['macd'] < curr['macdsignal'] and   # Already in bearish MACD
+            prev_rsi > 55 and curr['rsi'] < 50 and  # RSI crossed below 50 (tightened)
+            vol_confirmed and                        # Volume confirmation
+            curr_body < 0 and                        # Bearish candle
+            strong_trend                             # Strong ADX
+        )
+        
+        if rsi_rejoin:
+            return "SELL", "RSI_Rejoin_Confirmed"
+        
+        # Condition 3: EMA rejection (price hit EMA from below and rejected)
+        ema_50 = curr.get('ema_50')
+        if ema_50 and not pd.isna(ema_50):
+            near_ema = abs(curr['high'] - ema_50) < (curr.get('atr', curr['close'] * 0.01) * 0.5)
+            rejecting = curr['close'] < curr['open'] and prev['high'] > ema_50
             
-    return "HOLD", "None"
+            if near_ema and rejecting and vol_confirmed and rsi < 60 and rsi > 40:
+                return "SELL", "EMA_Rejection"
+            
+    return "HOLD", "No_Signal"
+
