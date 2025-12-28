@@ -29,15 +29,20 @@ def analyze_performance(target_mode=None):
        df['timestamp'] = pd.to_datetime(df['timestamp'])
 
     # Determine Exits
-    # Logic: Rows where action='CLOSE' OR pnl_amount != 0
-    # Check if 'action' column exists
-    if 'action' in df.columns:
+    # Logic: Rows where action='CLOSE' OR reason in (STOP_LOSS, TAKE_PROFIT) OR pnl_amount != 0
+    exits = pd.DataFrame()
+    
+    if 'action' in df.columns and 'reason' in df.columns:
+        # Check for CLOSE action OR exit reasons (STOP_LOSS, TAKE_PROFIT)
+        exits = df[
+            (df['action'] == 'CLOSE') | 
+            (df['reason'].isin(['STOP_LOSS', 'TAKE_PROFIT']))
+        ].copy()
+    elif 'action' in df.columns:
         exits = df[df['action'] == 'CLOSE'].copy()
-        if exits.empty:
-            # Fallback for old logs
-            exits = df[df['pnl_amount'] != 0].copy()
-    else:
-        # Fallback if action col missing
+    
+    # Fallback: if still empty, use pnl_amount != 0
+    if exits.empty:
         exits = df[df['pnl_amount'] != 0].copy()
 
     # --- Metrics ---

@@ -117,12 +117,14 @@ def analyze_performance_ui():
     
     print("1. All History")
     print("2. Backtest Only")
-    print("3. Live Only")
+    print("3. Paper Trading Only")
+    print("4. Live Only")
     
-    sub = input("Select Filter [1-3] (Default 1): ")
+    sub = input("Select Filter [1-4] (Default 1): ")
     mode_filter = None
     if sub == '2': mode_filter = "BACKTEST"
-    elif sub == '3': mode_filter = "LIVE"
+    elif sub == '3': mode_filter = "PAPER"
+    elif sub == '4': mode_filter = "LIVE"
     
     try:
         analytics.analyze_performance(mode_filter)
