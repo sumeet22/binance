@@ -5,8 +5,9 @@ from datetime import datetime
 import threading
 from pymongo import MongoClient, DESCENDING
 
-# File fallback
-LOG_FILE = "trade_history.csv"
+# File fallback - use /app/data in Docker, current dir for local dev
+DATA_DIR = "/app/data" if os.path.exists("/app/data") else "."
+LOG_FILE = os.path.join(DATA_DIR, "trade_history.csv")
 
 # MongoDB Config
 MONGO_URI = os.getenv("MONGO_URI", "")
