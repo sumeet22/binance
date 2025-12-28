@@ -28,11 +28,14 @@ class DynamicBot:
             logger.error("❌ Failed to connect to Binance. Check API keys and network.")
             raise RuntimeError("Binance client initialization failed")
         
-        self.active_trades = {sym: None for sym in SYMBOLS} 
         self.stop_signal = False
         
         logger.info("Initializing Database...")
         init_mongo_db() 
+        
+        # Dynamic symbol selection based on performance
+        self.tradeable_symbols = self._select_symbols()
+        self.active_trades = {sym: None for sym in self.tradeable_symbols} 
         
         logger.info("Fetching Exchange Filters (LOT_SIZE)...")
         self.precision_info = fetch_exchange_info(self.client)
@@ -49,6 +52,32 @@ class DynamicBot:
         
         logger.info(f"Dynamic Institutional Bot Initialized.")
         logger.info(f"Capital: ${CAPITAL} | Risk/Trade: ${RISK_PER_TRADE} | Max Daily Loss: -{MAX_DAILY_LOSS}%")
+        logger.info(f"Trading {len(self.tradeable_symbols)} symbols: {', '.join(self.tradeable_symbols)}")
+
+    def _select_symbols(self):
+        """Dynamically select symbols based on historical performance."""
+        try:
+            from symbol_selector import get_tradeable_symbols, log_symbol_selection
+            
+            # Log full analysis
+            log_symbol_selection(MODE)
+            
+            # Get tradeable symbols
+            tradeable, excluded = get_tradeable_symbols(MODE)
+            
+            if excluded:
+                logger.info(f"🚫 Excluded {len(excluded)} poor performers: {', '.join(excluded.keys())}")
+            
+            # Ensure we have at least some symbols
+            if len(tradeable) < 3:
+                logger.warning("Too few symbols qualified. Using all symbols.")
+                return list(SYMBOLS)
+            
+            return tradeable
+            
+        except Exception as e:
+            logger.warning(f"Symbol selection failed: {e}. Using default symbols.")
+            return list(SYMBOLS)
 
     def load_state(self):
         if os.path.exists(STATE_FILE):
@@ -198,7 +227,7 @@ class DynamicBot:
         
         while not self.stop_signal:
             start_scan = time.time()
-            for symbol in SYMBOLS:
+            for symbol in self.tradeable_symbols:
                 if self.stop_signal: break
                 try:
                     self.process_symbol(symbol)
@@ -291,7 +320,7 @@ class DynamicBot:
             
             if pd.isna(adx): adx = 0
             
-            if adx > 25 and bias != "NEUTRAL":
+            if adx > 30 and bias != "NEUTRAL":  # Increased from 25 to 30 for stronger trends
                 if adx > max_adx:
                     max_adx = adx
                     best_trend_tf = tf
@@ -472,34 +501,41 @@ class DynamicBot:
 
         if pos['type'] == 'LONG':
             profit_dist = pos['highest_price'] - pos['entry']
-            if profit_dist > (1.5 * risk_r):
-                new_sl = pos['entry'] + (0.1 * risk_r)
+            
+            # Move to breakeven earlier (at 1R instead of 1.5R)
+            if profit_dist > (1.0 * risk_r):
+                new_sl = pos['entry'] + (0.1 * risk_r)  # Slightly above entry
                 if sl == 0 or new_sl > sl:
                     pos['sl'] = new_sl
                     updated = True
-                    logger.info(f"[{symbol}] Defensive: SL moved to Breakeven {new_sl:.4f}")
+                    logger.info(f"[{symbol}] 🔒 Breakeven: SL moved to {new_sl:.4f}")
 
-            if profit_dist > (2.5 * risk_r):
-                trail_sl = pos['highest_price'] - (2.0 * atr)
+            # Start trailing earlier (at 1.5R instead of 2.5R)
+            if profit_dist > (1.5 * risk_r):
+                trail_sl = pos['highest_price'] - (1.5 * atr)  # Tighter trail (was 2.0)
                 if sl == 0 or trail_sl > sl:
-                     pos['sl'] = trail_sl
-                     updated = True
-                     logger.info(f"[{symbol}] Trailing Profit: SL moved to {trail_sl:.4f}")
+                    pos['sl'] = trail_sl
+                    updated = True
+                    logger.info(f"[{symbol}] 📈 Trailing: SL moved to {trail_sl:.4f}")
 
         elif pos['type'] == 'SHORT':
             profit_dist = pos['entry'] - pos['lowest_price']
-            if profit_dist > (1.5 * risk_r):
-                new_sl = pos['entry'] - (0.1 * risk_r)
+            
+            # Move to breakeven earlier (at 1R instead of 1.5R)
+            if profit_dist > (1.0 * risk_r):
+                new_sl = pos['entry'] - (0.1 * risk_r)  # Slightly below entry
                 if sl == 0 or new_sl < sl:
                     pos['sl'] = new_sl
                     updated = True
-                    logger.info(f"[{symbol}] Defensive: SL moved to Breakeven {new_sl:.4f}")
-            if profit_dist > (2.5 * risk_r):
-                trail_sl = pos['lowest_price'] + (2.0 * atr)
+                    logger.info(f"[{symbol}] 🔒 Breakeven: SL moved to {new_sl:.4f}")
+            
+            # Start trailing earlier (at 1.5R instead of 2.5R)
+            if profit_dist > (1.5 * risk_r):
+                trail_sl = pos['lowest_price'] + (1.5 * atr)  # Tighter trail (was 2.0)
                 if sl == 0 or trail_sl < sl:
                     pos['sl'] = trail_sl
                     updated = True
-                    logger.info(f"[{symbol}] Trailing Profit: SL moved to {trail_sl:.4f}")
+                    logger.info(f"[{symbol}] 📈 Trailing: SL moved to {trail_sl:.4f}")
 
         if updated:
             self.save_state()
