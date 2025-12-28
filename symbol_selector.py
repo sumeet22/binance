@@ -11,10 +11,31 @@ from typing import List, Dict, Tuple
 from trade_logger import get_mongo_collection
 from utils_bot import logger
 
-# Default symbols to consider (full universe)
+# Default symbols to consider (full universe - top coins by market cap and volume)
 ALL_SYMBOLS = [
+    # Top 10 by market cap
     "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT",
-    "ADAUSDT", "DOGEUSDT", "TRXUSDT", "LTCUSDT", "LINKUSDT", "AVAXUSDT"
+    "ADAUSDT", "DOGEUSDT", "TRXUSDT", "LTCUSDT", "LINKUSDT",
+    "AVAXUSDT",
+    
+    # Layer 2 & DeFi
+    "MATICUSDT",  # Polygon
+    "DOTUSDT",    # Polkadot
+    "ATOMUSDT",   # Cosmos
+    "NEARUSDT",   # Near Protocol
+    "UNIUSDT",    # Uniswap
+    "APTUSDT",    # Aptos
+    "ARBUSDT",    # Arbitrum
+    "OPUSDT",     # Optimism
+    "SUIUSDT",    # Sui
+    "INJUSDT",    # Injective
+    
+    # Gaming & Metaverse
+    "SANDUSDT",   # The Sandbox
+    "MANAUSDT",   # Decentraland
+    
+    # High volume memes
+    "SHIBUSDT",   # Shiba Inu
 ]
 
 # Minimum criteria for a symbol to be tradeable
