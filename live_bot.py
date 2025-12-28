@@ -13,7 +13,10 @@ from trade_logger import log_trade, init_mongo_db, get_mongo_collection
 
 TREND_TIMEFRAMES = ['4h', '2h', '1h'] 
 ENTRY_TIMEFRAMES = ['30m', '15m']
-STATE_FILE = "bot_state.json"
+
+# Use /app/data for Docker (persistent volume), fallback to current dir for local dev
+DATA_DIR = "/app/data" if os.path.exists("/app/data") else "."
+STATE_FILE = os.path.join(DATA_DIR, "bot_state.json")
 
 class DynamicBot:
     def __init__(self):
