@@ -4,7 +4,7 @@
 # ============================================
 
 # Build stage - install dependencies
-FROM python:3.11-slim AS builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # ============================================
 # Production stage - minimal runtime image
 # ============================================
-FROM python:3.11-slim AS production
+FROM python:3.12-slim AS production
 
 # Labels for Coolify & OCI compliance
 LABEL org.opencontainers.image.title="Institutional Trading Bot"
