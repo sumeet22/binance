@@ -18,6 +18,12 @@ STATE_FILE = "bot_state.json"
 class DynamicBot:
     def __init__(self):
         self.client = get_binance_client()
+        
+        # Validate client connection
+        if self.client is None:
+            logger.error("❌ Failed to connect to Binance. Check API keys and network.")
+            raise RuntimeError("Binance client initialization failed")
+        
         self.active_trades = {sym: None for sym in SYMBOLS} 
         self.stop_signal = False
         
@@ -26,6 +32,9 @@ class DynamicBot:
         
         logger.info("Fetching Exchange Filters (LOT_SIZE)...")
         self.precision_info = fetch_exchange_info(self.client)
+        
+        if not self.precision_info:
+            logger.warning("⚠️ Could not fetch exchange info. Using defaults.")
         
         self.load_state()
         self.sync_with_mongo()

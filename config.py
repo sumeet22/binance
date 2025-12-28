@@ -30,11 +30,32 @@ API_SECRET = os.getenv("BINANCE_API_SECRET", "")
 
 # Validate API Keys for PAPER/LIVE modes
 if MODE in ["PAPER", "LIVE"]:
-    if not API_KEY or not API_SECRET or API_KEY == "your_api_key_here":
+    missing_vars = []
+    if not API_KEY or API_KEY == "your_api_key_here":
+        missing_vars.append("BINANCE_API_KEY")
+    if not API_SECRET or API_SECRET == "your_api_secret_here":
+        missing_vars.append("BINANCE_API_SECRET")
+    
+    if missing_vars:
+        import time
         print("=" * 60)
-        print("ERROR: BINANCE_API_KEY and BINANCE_API_SECRET are required!")
-        print("Set them as environment variables in Coolify or .env file.")
+        print("❌ CONFIGURATION ERROR - MISSING ENVIRONMENT VARIABLES")
         print("=" * 60)
+        print(f"Missing: {', '.join(missing_vars)}")
+        print("")
+        print("How to fix:")
+        print("1. In Coolify: Go to Environment Variables tab")
+        print("2. Add BINANCE_API_KEY and BINANCE_API_SECRET")
+        print("3. For PAPER mode, use Testnet keys from:")
+        print("   https://testnet.binance.vision/")
+        print("")
+        print("Current values detected:")
+        print(f"  MODE: {MODE}")
+        print(f"  BINANCE_API_KEY: {'[NOT SET]' if not API_KEY else '[SET but placeholder]' if API_KEY == 'your_api_key_here' else '[SET]'}")
+        print(f"  BINANCE_API_SECRET: {'[NOT SET]' if not API_SECRET else '[SET but placeholder]' if API_SECRET == 'your_api_secret_here' else '[SET]'}")
+        print("=" * 60)
+        print("⏳ Waiting 60 seconds before exit (check logs in Coolify)...")
+        time.sleep(60)
         sys.exit(1)
 
 if MODE == "PAPER":
